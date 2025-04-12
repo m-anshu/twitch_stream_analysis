@@ -1,5 +1,5 @@
-from pyspark.sql import SparkSession
-from pyspark.sql.functions import from_json, col, count, max, avg, to_timestamp
+from pyspark.sql import SparkSession 
+from pyspark.sql.functions import from_json, col, count, max, avg, to_timestamp, current_timestamp
 from pyspark.sql.types import StructType, StructField, StringType, IntegerType
 import os
 
@@ -44,11 +44,13 @@ if stream_df is None:
     print("❌ Kafka stream is not available. Exiting.")
     exit(1)
 
-# Convert 'started_at' to timestamp
-stream_df = stream_df.withColumn("started_at", to_timestamp("started_at"))
+# Convert 'started_at' to timestamp and add 'record_time'
+stream_df = stream_df.withColumn("started_at", to_timestamp("started_at")) \
+                     .withColumn("record_time", current_timestamp())
 
-# Perform aggregation every 5 entries in the topic (using trigger interval)
-# We'll collect the metrics and process in batches
+# === AGGREGATIONS ===
+
+# Aggregation: Average, Count, Max viewer count per game
 metrics_df = stream_df.groupBy(
     col("game_name")
 ).agg(
@@ -64,6 +66,26 @@ query = metrics_df.writeStream \
     .option("truncate", False) \
     .option("numRows", 100) \
     .trigger(processingTime='5 seconds') \
-    .start()  # Fixed indentation here
+    .start()
 
+# === RAW DATA STORAGE TO MYSQL ===
+
+def write_to_mysql(df, epoch_id):
+    df.write \
+      .format("jdbc") \
+      .option("url", "jdbc:mysql://localhost:3306/twitchdb") \
+      .option("driver", "com.mysql.cj.jdbc.Driver") \
+      .option("dbtable", "twitch_streams_raw") \
+      .option("user", "root") \
+      .option("password", "root") \
+      .mode("append") \
+      .save()
+
+# Write raw records to MySQL
+raw_query = stream_df.writeStream \
+    .foreachBatch(write_to_mysql) \
+    .outputMode("append") \
+    .start()
+
+# === KEEP STREAMING RUNNING ===
 spark.streams.awaitAnyTermination()
