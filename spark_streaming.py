@@ -1,6 +1,10 @@
 from pyspark.sql import SparkSession
-from pyspark.sql.functions import from_json, col, window, count, max
+from pyspark.sql.functions import from_json, col, count, max, avg, to_timestamp
 from pyspark.sql.types import StructType, StructField, StringType, IntegerType
+import os
+
+# Set SPARK_LOCAL_IP to avoid loopback warning
+os.environ['SPARK_LOCAL_IP'] = '127.0.0.1'
 
 # Initialize Spark session
 spark = SparkSession.builder \
@@ -18,10 +22,6 @@ schema = StructType([
 ])
 
 def get_kafka_stream():
-    """
-    Attempts to connect to Kafka and read the stream.
-    If it fails, returns None.
-    """
     try:
         df = spark.readStream \
             .format("kafka") \
@@ -32,7 +32,6 @@ def get_kafka_stream():
         parsed = df.selectExpr("CAST(value AS STRING)") \
             .select(from_json(col("value"), schema).alias("data")) \
             .select("data.*")
-        
         return parsed
     except Exception as e:
         print("⚠️ Kafka stream could not be initialized:", e)
@@ -41,43 +40,30 @@ def get_kafka_stream():
 # Try to get Kafka stream
 stream_df = get_kafka_stream()
 
-# Aggregation 1: Average viewer count per game every minute
-avg_df = stream_df.groupBy(
-    window(col("started_at"), "1 minute"),
+if stream_df is None:
+    print("❌ Kafka stream is not available. Exiting.")
+    exit(1)
+
+# Convert 'started_at' to timestamp
+stream_df = stream_df.withColumn("started_at", to_timestamp("started_at"))
+
+# Perform aggregation every 5 entries in the topic (using trigger interval)
+# We'll collect the metrics and process in batches
+metrics_df = stream_df.groupBy(
     col("game_name")
-).agg({"viewer_count": "avg"}) \
-.withColumnRenamed("avg(viewer_count)", "avg_viewers")
+).agg(
+    avg("viewer_count").alias("avg_viewers"),
+    count("*").alias("stream_count"),
+    max("viewer_count").alias("max_viewers")
+)
 
-# Aggregation 2: Count of streams per game
-count_df = stream_df.groupBy("game_name").agg(count("*").alias("stream_count"))
+# Output metrics to console
+query = metrics_df.writeStream \
+    .outputMode("complete") \
+    .format("console") \
+    .option("truncate", False) \
+    .option("numRows", 100) \
+    .trigger(processingTime='5 seconds') \
+    .start()  # Fixed indentation here
 
-# Aggregation 3: Maximum viewer count per game
-max_df = stream_df.groupBy("game_name").agg(max("viewer_count").alias("max_viewers"))
-
-# Output all aggregations to console (only for real streaming data)
-if stream_df.isStreaming:
-    avg_query = avg_df.writeStream \
-        .outputMode("update") \
-        .format("console") \
-        .option("truncate", False) \
-        .start()
-
-    count_query = count_df.writeStream \
-        .outputMode("complete") \
-        .format("console") \
-        .option("truncate", False) \
-        .start()
-
-    max_query = max_df.writeStream \
-        .outputMode("complete") \
-        .format("console") \
-        .option("truncate", False) \
-        .start()
-
-    # Keep streaming alive
-    spark.streams.awaitAnyTermination()
-else:
-    print("💡 Using static data (no live Kafka stream). Showing example aggregations:")
-    avg_df.show(truncate=False)
-    count_df.show(truncate=False)
-    max_df.show(truncate=False)
+spark.streams.awaitAnyTermination()
