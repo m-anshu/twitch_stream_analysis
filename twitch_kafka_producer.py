@@ -7,7 +7,11 @@ from kafka import KafkaProducer
 # Twitch API credentials
 CLIENT_ID = "exdwulqs8817ahx29j1oz9mgnv8tgq"
 CLIENT_SECRET = "ua49cfqafynbywqd9y05m2dc1krl8l"
-TOPIC = "twitch_streams"
+
+# Kafka topics based on viewer count
+TOPIC_HIGH = "twitch_streams_high"
+TOPIC_MID = "twitch_streams_mid"
+TOPIC_LOW = "twitch_streams_low"
 
 # Get access token
 def get_access_token():
@@ -36,10 +40,10 @@ producer = KafkaProducer(
     value_serializer=lambda v: json.dumps(v).encode('utf-8')
 )
 
-# Optional: test Kafka connection
+# Test Kafka connection
 try:
     test_msg = {"test": "Kafka connection"}
-    producer.send(TOPIC, test_msg)
+    producer.send(TOPIC_LOW, test_msg)  # test with one of the topics
     producer.flush()
     print(f"[TEST] Sent test message: {test_msg}")
 except Exception as e:
@@ -49,7 +53,7 @@ except Exception as e:
 
 # Fetch Twitch streams
 def fetch_streams():
-    url = "https://api.twitch.tv/helix/streams?first=5"
+    url = "https://api.twitch.tv/helix/streams?first=50"
     response = requests.get(url, headers=HEADERS)
     if response.ok:
         return response.json().get("data", [])
@@ -57,9 +61,19 @@ def fetch_streams():
         print("Failed to fetch streams:", response.text)
         return []
 
-# Set to True for one-time test run (not a loop)
+# Determine which topic to send to
+def determine_topic(viewer_count):
+    if viewer_count > 25000:
+        return TOPIC_HIGH
+    elif viewer_count > 15000:
+        return TOPIC_MID
+    else:
+        return TOPIC_LOW
+
+# Set to True for one-time test run
 TEST_MODE = False
 
+# Stream processing loop
 def run_stream_producer():
     while True:
         try:
@@ -71,15 +85,16 @@ def run_stream_producer():
                     "viewer_count": stream["viewer_count"],
                     "started_at": stream["started_at"]
                 }
-                producer.send(TOPIC, payload)
+                topic = determine_topic(payload["viewer_count"])
+                producer.send(topic, payload)
                 producer.flush()
-                print(f"✅ Sent: {payload}")
+                print(f"✅ Sent to {topic}: {payload}")
             
             if TEST_MODE:
                 print("✅ Test mode: exiting after one batch.")
                 break
 
-            time.sleep(10)
+            time.sleep(20)
         except Exception as e:
             print("❌ Error in producer loop:")
             traceback.print_exc()
