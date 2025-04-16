@@ -28,10 +28,13 @@ pip install requests kafka-python pyspark mysql-connector-python
 ## Setting Up MYSQL
 
 ### Create DB
+```bash
 CREATE DATABASE twitchdb;
+```
 
 
 ### Create Table
+```bash
 CREATE TABLE twitch_streams_enriched (
     user_name VARCHAR(255),
     game_name VARCHAR(255),
@@ -41,6 +44,7 @@ CREATE TABLE twitch_streams_enriched (
     is_popular BOOLEAN,
     viewer_bucket VARCHAR(50)
 );
+```
 
 
 ## Kafka Topics
@@ -81,30 +85,30 @@ The Kafka producer sends data to the following topics based on viewer count:
 
 Ensure that Kafka and MySQL are running.
 
-    Start Kafka by running the following command in the terminal:
+Start Kafka by running the following command in the terminal:
 
     bin/kafka-server-start.sh config/server.properties
 
-    Create the necessary database and tables in MySQL as mentioned above.
+Create the necessary database and tables in MySQL as mentioned above.
 
 2. Start Kafka Producer
 
 Run the twitch_kafka_producer.py script to start sending stream data to Kafka:
 
-python twitch_kafka_producer.py
+    python twitch_kafka_producer.py
 
 3. Start Stream Processing
 
 Run the batch_processing.py script to start consuming from Kafka, processing the data using Spark and displaying the results on terminal:
 
- spark-submit --packages org.apache.spark:spark-sql-kafka-0-10_2.12:3.5.5 spark_streaming.py
+    spark-submit --packages org.apache.spark:spark-sql-kafka-0-10_2.12:3.5.5 spark_streaming.py
 
 
 4. Start Batch Processing
 
 Run the batch_processing.py script to start consuming from Kafka, processing the data, and storing the results in MySQL:
 
-spark-submit --packages org.apache.spark:spark-sql-kafka-0-10_2.12:3.5.0,mysql:mysql-connector-java:8.0.33 spark_streaming.py
+    spark-submit --packages org.apache.spark:spark-sql-kafka-0-10_2.12:3.5.0,mysql:mysql-connector-java:8.0.33 spark_streaming.py
 
 5. Monitor Output
 
