@@ -5,6 +5,7 @@ from pyspark.sql.functions import (
 )
 from pyspark.sql.types import StructType, StructField, StringType, IntegerType
 import os
+import time
 
 # Avoid loopback warning
 os.environ['SPARK_LOCAL_IP'] = '127.0.0.1'
@@ -81,6 +82,8 @@ filtered_streams = filtered_streams.withColumn(
 # ────────────────────────────────
 
 def process_batch(df, epoch_id):
+    start = time.time()
+
     print(f"\n📦 Processing batch {epoch_id}")
 
     # Total viewers per game
@@ -93,7 +96,7 @@ def process_batch(df, epoch_id):
     print("🎮 Top games by viewers:")
     viewers_per_game.show(5)
 
-    # Popularity distribution
+    # Popularity distribution/popularity bucket
     popularity_dist = df.groupBy("viewer_bucket").agg(
         count("*").alias("count")
     ).orderBy("viewer_bucket")
@@ -109,18 +112,11 @@ def process_batch(df, epoch_id):
 
     print("👤 Top streamers:")
     top_streamers.show(5)
+    duration = time.time() - start
+    print(f"[PERF] Stream processing batch {epoch_id} took {duration:.2f} seconds")
 
-    # Save raw + enriched data to MySQL
-    df.write \
-      .format("jdbc") \
-      .option("url", "jdbc:mysql://localhost:3306/twitchdb") \
-      .option("driver", "com.mysql.cj.jdbc.Driver") \
-      .option("dbtable", "twitch_streams_enriched") \
-      .option("user", "root") \
-      .option("password", "root") \
-      .mode("append") \
-      .save()
 
+    
 # ────────────────────────────────
 # ⏱️ START STREAMING
 # ────────────────────────────────
