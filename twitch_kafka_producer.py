@@ -3,6 +3,7 @@ import json
 import time
 import traceback
 from kafka import KafkaProducer
+from datetime import datetime,timezone
 
 # Twitch API credentials
 CLIENT_ID = "exdwulqs8817ahx29j1oz9mgnv8tgq"
@@ -62,12 +63,14 @@ def fetch_streams():
         return []
 
 # Determine which topic to send to
-def determine_topic(viewer_count):
-    if viewer_count > 25000:
+def determine_topic(started_at):
+    start_time=datetime.fromisoformat(started_at.replace("Z","+00:00"))
+    stream_age_minutes=(datetime.now(timezone.utc)-start_time).total_seconds()/60
+    if stream_age_minutes >100 :
         return TOPIC_HIGH
-    elif viewer_count > 15000:
+    elif stream_age_minutes >60 :
         return TOPIC_MID
-    else:
+    else :
         return TOPIC_LOW
 
 # Set to True for one-time test run
@@ -85,7 +88,7 @@ def run_stream_producer():
                     "viewer_count": stream["viewer_count"],
                     "started_at": stream["started_at"]
                 }
-                topic = determine_topic(payload["viewer_count"])
+                topic = determine_topic(payload["started_at"])
                 producer.send(topic, payload)
                 producer.flush()
                 print(f"✅ Sent to {topic}: {payload}")
