@@ -108,7 +108,7 @@ Run the batch_processing.py script to start consuming from Kafka, processing the
 
 Run the batch_processing.py script to start consuming from Kafka, processing the data, and storing the results in MySQL:
 
-    spark-submit --packages org.apache.spark:spark-sql-kafka-0-10_2.12:3.5.0,mysql:mysql-connector-java:8.0.33 spark_streaming.py
+    spark-submit --packages org.apache.spark:spark-sql-kafka-0-10_2.12:3.5.0,mysql:mysql-connector-java:8.0.33 batch_processing.py
 
 5. Monitor Output
 
