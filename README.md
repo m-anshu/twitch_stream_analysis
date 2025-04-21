@@ -49,13 +49,13 @@ CREATE TABLE twitch_streams_enriched (
 
 ## Kafka Topics
 
-The Kafka producer sends data to the following topics based on viewer count:
+The Kafka producer sends data to the following topics based on stream runtime
 
-    twitch_streams_high: For streams with high viewer counts.
+    twitch_streams_high
 
-    twitch_streams_mid: For streams with medium viewer counts.
+    twitch_streams_mid
 
-    twitch_streams_low: For streams with low viewer counts.
+    twitch_streams_low
 
 ## How It Works
 1. Kafka Producer (twitch_kafka_producer.py):
